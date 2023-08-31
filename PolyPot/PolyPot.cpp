@@ -39,15 +39,17 @@ class Voice
         return 0.f;
     }
 
-    void OnNoteOn(float note, float velocity)
+    void OnNoteOn(float note, float velocity, float a, float d, float s, float r)
     {
-        // this does not work scope error
-        // atk = atkValue, dcy = dcyValue, sus = susValue, rel = relValue;
-        // env_.SetSustainLevel(sus);
-        // env_.SetTime(ADSR_SEG_ATTACK, atk);
-        // env_.SetTime(ADSR_SEG_DECAY, dcy);
-        // env_.SetTime(ADSR_SEG_RELEASE, rel);        
-        
+
+        atk_      = a;
+        dcy_      = d;
+        sus_      = s;
+        rel_      = r;
+        env_.SetSustainLevel(sus_);
+        env_.SetTime(ADSR_SEG_ATTACK, atk_);
+        env_.SetTime(ADSR_SEG_DECAY, dcy_);
+        env_.SetTime(ADSR_SEG_RELEASE, rel_);        
         note_     = note;
         velocity_ = velocity;
         osc_.SetFreq(mtof(note_));
@@ -66,7 +68,7 @@ class Voice
     float      note_, velocity_;
     bool       active_;
     bool       env_gate_;
-    float atk, dcy, sus, rel;
+    float atk_, dcy_, sus_, rel_;
 };
 
 template <size_t max_voices>
@@ -95,12 +97,12 @@ class VoiceManager
         return sum;
     }
 
-    void OnNoteOn(float notenumber, float velocity)
+    void OnNoteOn(float notenumber, float velocity, float a, float d, float s, float r)
     {
         Voice *v = FindFreeVoice();
         if(v == NULL)
             return;
-        v->OnNoteOn(notenumber, velocity);
+        v->OnNoteOn(notenumber, velocity, a, d, s, r);
     }
 
     void OnNoteOff(float notenumber, float velocity)
@@ -162,23 +164,27 @@ static void AudioCallback(const float * const*in, float **out, unsigned int size
     // Assign Output Buffers
     float *out_left = out[0];
     float *out_right = out[1];
-    float dry = 0.0f, send = 0.0f, wetl = 0.0f, wetr = 0.0f; // Effects Vars
+    // float dry = 0.0f, send = 0.0f, wetl = 0.0f, wetr = 0.0f; // Effects Vars
     for(size_t sample = 0; sample < size; sample++)
     {
-        filt.Process(voice_handler.Process());
-        // get dry sample from the state of the voices
-        dry  = filt.Low() * 0.5f; 
-        // run an attenuated dry signal through the reverb
-        send = dry * 0.45f;
-        verb.Process(send, send, &wetl, &wetr);
-        // sum the dry oscillator and processed reverb signal
-        out_left[sample]  = dry + wetl;
-        out_right[sample] = dry + wetr;
+        // filt.Process(voice_handler.Process());
+        // // get dry sample from the state of the voices
+        // dry  = filt.Low() * 0.5f; 
+        // // run an attenuated dry signal through the reverb
+        // send = dry * 0.45f;
+        // verb.Process(send, send, &wetl, &wetr);
+        // // sum the dry oscillator and processed reverb signal
+        // out_left[sample]  = dry + wetl;
+        // out_right[sample] = dry + wetr;
+
+        // debug simple output
+        out_left[sample]  = voice_handler.Process();
+        out_right[sample] = voice_handler.Process();
     }
 }
 
 // Typical Switch case for Message Type.
-void HandleMidiMessage(MidiEvent m)
+void HandleMidiMessage(MidiEvent m, float a, float d, float s, float r)
 {
     switch(m.type)
     {
@@ -192,7 +198,7 @@ void HandleMidiMessage(MidiEvent m)
             }
             else
             {
-                voice_handler.OnNoteOn(p.note, p.velocity);
+                voice_handler.OnNoteOn(p.note, p.velocity, a, d, s, r);
             }
         }
         break;
@@ -249,7 +255,7 @@ int main(void)
 		midi.Listen();
         while(midi.HasEvents())
         {
-            HandleMidiMessage(midi.PopEvent());
+            HandleMidiMessage(midi.PopEvent(), atkValue, dcyValue, susValue, relValue);
         }
     }
 }
